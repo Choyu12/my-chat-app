@@ -8,12 +8,12 @@ function MainLayout({ currentUser }) {
   const [showProfile, setShowProfile] = useState(false);
 
   const handleSelectChat = (chatUser) => {
-    setShowProfile(false); // ปิดหน้าโปรไฟล์ (ถ้าเปิดอยู่)
+    setShowProfile(false);
     setSelectedChatUser(chatUser);
   };
 
   const handleShowProfile = () => {
-    setSelectedChatUser(null); // ปิดหน้าแชท (ถ้าเปิดอยู่)
+    setSelectedChatUser(null);
     setShowProfile(true);
   };
 
@@ -31,21 +31,25 @@ function MainLayout({ currentUser }) {
     }
     return (
       <div className="welcome-screen">
-        <h2>Select a chat to start messaging</h2>
+        <h2>เลือกแชทเพื่อเริ่มการสนทนา</h2>
+        <p>หรือสร้างการสนทนาใหม่จากรายชื่อผู้ใช้</p>
       </div>
     );
   };
 
   return (
     <div className="main-layout">
-      <div className="sidebar">
+      {/* Sidebar - ซ่อนเมื่อมีการเปิดแชทหรือโปรไฟล์บนมือถือ */}
+      <div className={`sidebar ${!selectedChatUser && !showProfile ? 'active' : ''}`}>
         <ChatList 
           currentUser={currentUser} 
           onSelectChat={handleSelectChat} 
           onShowProfile={handleShowProfile} 
         />
       </div>
-      <div className="chat-window">
+      
+      {/* Chat Window - แสดงเฉพาะเมื่อมีการเลือกแชทหรือโปรไฟล์ */}
+      <div className={`chat-window ${selectedChatUser ? 'has-chat' : ''} ${showProfile ? 'has-profile' : ''}`}>
         {renderRightPanel()}
       </div>
     </div>

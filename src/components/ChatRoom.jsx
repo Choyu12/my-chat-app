@@ -137,7 +137,7 @@ function ChatRoom({ currentUser, chatUser, onBack }) {
     <div className="chat-container">
       <div className="chat-header">
         <button onClick={onBack} className="back-btn">{'< Back'}</button>
-        <span>{chatUser?.email}</span>
+        <span>{chatUser?.displayName || chatUser?.email}</span>
         <button onClick={handleLogout} className="logout-btn" style={{ marginLeft: 'auto' }}>
           Logout
         </button>
@@ -148,39 +148,62 @@ function ChatRoom({ currentUser, chatUser, onBack }) {
           <div key={msg.id} className={`message-wrapper ${msg.senderId === currentUser.uid ? 'sent' : 'received'}`}>
             {msg.senderId !== currentUser.uid && (
               <div className="avatar">
-                {msg.email.charAt(0).toUpperCase()}
+                {chatUser?.photoURL ? (
+                  <img 
+                    src={chatUser.photoURL} 
+                    alt={chatUser.displayName || chatUser.email}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      borderRadius: '50%'
+                    }}
+                  />
+                ) : (
+                  (chatUser?.displayName || chatUser?.email || 'U').charAt(0).toUpperCase()
+                )}
               </div>
             )}
             <div className={`message ${msg.senderId === currentUser.uid ? 'sent' : 'received'}`}>
-              {/* Header in bubble is removed for LINE style */}
-              {msg.text && <p style={{ margin: 0 }}>{msg.text}</p>}
+              {msg.text && <p>{msg.text}</p>}
               {msg.imageBase64 && (
-                <img
-                  src={msg.imageBase64}
-                  alt="content"
-                  style={{ maxWidth: '200px', borderRadius: '8px' }}
-                />
+                <div className="message-image-wrapper">
+                  <img
+                    src={msg.imageBase64}
+                    alt="content"
+                    onClick={() => window.open(msg.imageBase64, '_blank')}
+                    title="คลิกเพื่อดูภาพขนาดเต็ม"
+                  />
+                </div>
               )}
             </div>
           </div>
         ))}
         
         <div className="typing-indicator-container">
-          {isTyping && <span>{chatUser.email} is typing...</span>}
+          {isTyping && <span>{chatUser?.displayName || chatUser?.email} is typing...</span>}
         </div>
         <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={handleSendMessage} className="input-area">
-        <input type="file" ref={fileInputRef} accept="image/*"/>
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          accept="image/*"
+          id="image-upload"
+        />
+        <label htmlFor="image-upload" title="แนบรูปภาพ">
+          📎
+        </label>
         <input
-            type="text"
-            placeholder="พิมพ์ข้อความ..."
-            value={newMessage}
-            onChange={(e) => {
-              setNewMessage(e.target.value);
-              handleTyping();
-            }}
+          type="text"
+          placeholder="พิมพ์ข้อความ..."
+          value={newMessage}
+          onChange={(e) => {
+            setNewMessage(e.target.value);
+            handleTyping();
+          }}
         />
         <button type="submit">ส่ง</button>
       </form>
