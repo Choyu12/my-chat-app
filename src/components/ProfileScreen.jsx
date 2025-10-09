@@ -1,27 +1,40 @@
-import { useState } from 'react';
-import { db, storage, auth } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useState, useEffect } from 'react';
+import { db, auth } from '../firebase'; // [แก้ไข] ไม่ต้อง import storage แล้ว
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 
 function ProfileScreen({ currentUser, onBack }) {
-  const [displayName, setDisplayName] = useState(currentUser.displayName || currentUser.email.split('@')[0]);
-  const [profileImage, setProfileImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(currentUser.photoURL || '');
-  const [isUploading, setIsUploading] = useState(false);
+  // [เพิ่ม] State สำหรับเก็บข้อมูล user ล่าสุด
+  const [userData, setUserData] = useState(null);
+  const [displayName, setDisplayName] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
+  // [เพิ่ม] ดึงข้อมูลโปรไฟล์ล่าสุดจาก Firestore ตอนเปิดหน้า
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        setUserData(data);
+        setDisplayName(data.displayName || '');
+        setPreviewUrl(data.photoURL || '');
+      }
+    };
+    fetchUserData();
+  }, [currentUser.uid]);
+  
+  // [แก้ไข] ฟังก์ชันจัดการการเปลี่ยนรูป
   const handleImageChange = (e) => {
     if (e.target.files[0]) {
       const file = e.target.files[0];
       
-      // ตรวจสอบขนาดไฟล์ (จำกัดที่ 2MB)
-      if (file.size > 2 * 1024 * 1024) {
+      if (file.size > 2 * 1024 * 1024) { // จำกัดขนาดไฟล์ที่ 2MB
         alert('ขนาดไฟล์ต้องไม่เกิน 2MB');
         return;
       }
       
-      setProfileImage(file);
-      
-      // สร้าง preview URL
+      // แปลงไฟล์รูปเป็น Base64 เพื่อใช้แสดงผลและบันทึก
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewUrl(reader.result);
@@ -30,28 +43,22 @@ function ProfileScreen({ currentUser, onBack }) {
     }
   };
 
+  // VVVVVVVV [แก้ไขฟังก์ชันนี้ทั้งหมด] VVVVVVVV
+  // [ส่วนการทำงาน] ฟังก์ชันบันทึกโปรไฟล์ (ใช้ Base64)
   const handleSaveProfile = async () => {
     if (!displayName.trim()) {
       alert('กรุณาใส่ชื่อแสดง');
       return;
     }
 
-    setIsUploading(true);
+    setIsSaving(true);
     try {
       const userDocRef = doc(db, 'users', currentUser.uid);
-      let newPhotoURL = currentUser.photoURL;
 
-      // 1. อัปโหลดรูปใหม่ (ถ้ามี)
-      if (profileImage) {
-        const storageRef = ref(storage, `profile_pictures/${currentUser.uid}`);
-        await uploadBytes(storageRef, profileImage);
-        newPhotoURL = await getDownloadURL(storageRef);
-      }
-
-      // 2. อัปเดตข้อมูลใน Firestore
+      // บันทึกชื่อที่แสดงและ URL รูป (ซึ่งเป็น Base64 string) ลง Firestore
       await updateDoc(userDocRef, {
         displayName: displayName.trim(),
-        photoURL: newPhotoURL,
+        photoURL: previewUrl,
       });
       
       alert('อัปเดตโปรไฟล์สำเร็จ!');
@@ -60,14 +67,21 @@ function ProfileScreen({ currentUser, onBack }) {
       console.error('Error updating profile:', error);
       alert('เกิดข้อผิดพลาดในการอัปเดตโปรไฟล์');
     } finally {
-      setIsUploading(false);
+      setIsSaving(false);
     }
   };
+  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
   const getAvatarUrl = () => {
     if (previewUrl) return previewUrl;
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName.charAt(0))}&size=256&background=667eea&color=fff&bold=true`;
+    if (userData?.photoURL) return userData.photoURL;
+    // รูปโปรไฟล์สำรองกรณีไม่มีรูป
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent((displayName || 'A').charAt(0))}&size=256&background=667eea&color=fff&bold=true`;
   };
+
+  if (!userData) {
+    return <div>Loading...</div>; // แสดงหน้า loading ขณะดึงข้อมูล
+  }
 
   return (
     <div className="profile-container">
@@ -115,11 +129,10 @@ function ProfileScreen({ currentUser, onBack }) {
         
         <button 
           onClick={handleSaveProfile} 
-          disabled={isUploading}
+          disabled={isSaving}
           className="save-btn"
         >
-          {isUploading && <span className="loading-spinner"></span>}
-          {isUploading ? 'กำลังบันทึก...' : 'บันทึกโปรไฟล์'}
+          {isSaving ? 'กำลังบันทึก...' : 'บันทึกโปรไฟล์'}
         </button>
       </div>
     </div>
