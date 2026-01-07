@@ -49,13 +49,14 @@ function CreateGroupScreen({ currentUser, onBack, onGroupCreated }) {
 
     try {
       await addDoc(collection(db, 'chats'), {
-        groupName: groupName.trim(),
-        isGroup: true,
-        members: members,
-        admin: currentUser.uid,
-        createdAt: serverTimestamp(),
-        typingUsers: [],
-        unreadCount: unreadCount, // [เพิ่ม] เพิ่ม field นี้ตอนสร้างกลุ่ม
+      groupName: groupName,        // ชื่อกลุ่ม
+      isGroup: true,               // บอกว่าเป็นกลุ่ม
+      members: allMembers,         // <--- ต้องมี ID เราอยู่ในนี้ด้วย
+      adminId: currentUser.uid,    // เก็บไว้ดูว่าใครเป็นหัวหน้าห้อง
+      lastMessage: "สร้างกลุ่มใหม่แล้ว",
+      updatedAt: serverTimestamp(), // สำคัญสำหรับการเรียงลำดับ
+      createdAt: serverTimestamp(),
+      unreadCount: {}              // เตรียม object สำหรับนับข้อความที่ยังไม่อ่าน
       });
       alert('Group created successfully!');
       onGroupCreated();
