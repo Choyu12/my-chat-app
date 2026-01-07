@@ -4,31 +4,29 @@ import {
   query, 
   where, 
   onSnapshot, 
-  orderBy, 
   addDoc, 
   serverTimestamp, 
   getDocs,
   doc,
   getDoc,
-  setDoc,
-  updateDoc
+  setDoc
 } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, db } from "../firebase"; 
 
 const Sidebar = ({ setSelectedChat }) => {
-  const [activeTab, setActiveTab] = useState("chats"); // 'chats' หรือ 'users'
+  const [activeTab, setActiveTab] = useState("chats");
   const [chats, setChats] = useState([]);
-  const [users, setUsers] = useState([]); // รายชื่อ User ทั้งหมด
+  const [users, setUsers] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // State สำหรับ Modal สร้างกลุ่ม
+  // Modal State
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [selectedUsers, setSelectedUsers] = useState([]); 
 
-  // 1. รอตรวจสอบสถานะ User
+  // 1. เช็ค User (แก้ปัญหาต้องล็อกอินใหม่ถึงจะเห็น)
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -36,19 +34,20 @@ const Sidebar = ({ setSelectedChat }) => {
       } else {
         setCurrentUser(null);
         setLoading(false);
+        setChats([]); // เคลียร์แชทเมื่อ logout
       }
     });
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. ดึงข้อมูล Chats (ห้องแชทที่มีเราอยู่)
+  // 2. ดึงแชท + แก้ปัญหาไม่ Realtime (ใช้ Client-side Sort)
   useEffect(() => {
     if (!currentUser) return;
 
+    // [แก้จุดที่ 1] เอา orderBy ออกจาก Query เพื่อเลี่ยงปัญหา Index ของ Firebase
     const q = query(
       collection(db, "chats"),
-      where("members", "array-contains", currentUser.uid),
-      orderBy("updatedAt", "desc")
+      where("members", "array-contains", currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -56,48 +55,68 @@ const Sidebar = ({ setSelectedChat }) => {
         id: doc.id,
         ...doc.data(),
       }));
+
+      // [แก้จุดที่ 2] มาเรียงลำดับที่นี่แทน (ใหม่สุดอยู่บน)
+      // ใช้ ?.seconds เพื่อป้องกันกรณี timestamp ยังไม่มา
+      chatData.sort((a, b) => {
+        const timeA = a.updatedAt?.seconds || 0;
+        const timeB = b.updatedAt?.seconds || 0;
+        return timeB - timeA; 
+      });
+
       setChats(chatData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching chats:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [currentUser]);
 
-  // 3. ดึงข้อมูล Users ทั้งหมด (สำหรับแท็บ All Users และสำหรับเลือกเข้ากลุ่ม)
+  // 3. ดึงรายชื่อ User ทั้งหมด
   useEffect(() => {
-    const fetchUsers = async () => {
-      if (!currentUser) return;
-      try {
-        const usersRef = collection(db, "users");
-        const snapshot = await getDocs(usersRef);
+    if (!currentUser) return;
+    const q = query(collection(db, "users"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
         const usersList = snapshot.docs
           .map(doc => ({ uid: doc.id, ...doc.data() }))
-          .filter(u => u.uid !== currentUser.uid); // ไม่เอาตัวเอง
+          .filter(u => u.uid !== currentUser.uid); 
         setUsers(usersList);
-      } catch (error) {
-        console.error("Error fetching users:", error);
-      }
-    };
-    fetchUsers();
+    });
+    return () => unsubscribe();
   }, [currentUser]);
 
-  // ฟังก์ชันเลือก Chat (จากแท็บ Chats)
-  const handleSelectChat = (chat) => {
-    setSelectedChat(chat);
+  // --- ฟังก์ชัน Helper ---
+  const getFriendData = (chat) => {
+    if (chat.isGroup) return null;
+    const friendId = chat.members.find(id => id !== currentUser.uid);
+    return users.find(u => u.uid === friendId); 
   };
 
-  // ฟังก์ชันเลือก User (จากแท็บ All Users -> เริ่มแชทส่วนตัว)
+  const handleSelectChat = (chat) => {
+    if (!chat.isGroup) {
+        const friend = getFriendData(chat);
+        const chatWithFriendName = {
+            ...chat,
+            otherUserName: friend ? (friend.displayName || friend.email) : "Unknown User",
+            photoURL: friend?.photoURL
+        };
+        setSelectedChat(chatWithFriendName);
+    } else {
+        setSelectedChat(chat);
+    }
+  };
+
   const handleSelectUser = async (otherUser) => {
-    // เช็คว่ามีห้องแชทส่วนตัวกับคนนี้หรือยัง
+    // ป้องกันการสร้างห้องซ้ำ
     const combinedId = currentUser.uid > otherUser.uid 
         ? currentUser.uid + otherUser.uid 
         : otherUser.uid + currentUser.uid;
 
     try {
         const res = await getDoc(doc(db, "chats", combinedId));
-        
         if (!res.exists()) {
-            // สร้างห้องแชทใหม่ถ้ายังไม่มี
             await setDoc(doc(db, "chats", combinedId), {
                 members: [currentUser.uid, otherUser.uid],
                 isGroup: false,
@@ -106,27 +125,27 @@ const Sidebar = ({ setSelectedChat }) => {
                 lastMessage: "เริ่มการสนทนา",
                 unreadCount: {}
             });
-            // ส่งข้อมูล Chat object กลับไปให้หน้าหลักแสดงผลทันที
             setSelectedChat({
                 id: combinedId,
                 members: [currentUser.uid, otherUser.uid],
                 isGroup: false,
-                otherUserName: otherUser.displayName || otherUser.email
+                otherUserName: otherUser.displayName || otherUser.email,
+                photoURL: otherUser.photoURL
             });
         } else {
-            // ถ้ามีอยู่แล้วก็ดึงมาใช้เลย
             setSelectedChat({ 
                 id: res.id, 
                 ...res.data(),
-                otherUserName: otherUser.displayName || otherUser.email 
+                otherUserName: otherUser.displayName || otherUser.email,
+                photoURL: otherUser.photoURL
             });
         }
+        setActiveTab("chats");
     } catch (err) {
         console.error("Error selecting user:", err);
     }
   };
 
-  // ฟังก์ชันสร้างกลุ่ม
   const handleCreateGroup = async () => {
     if (!groupName.trim()) return alert("กรุณาใส่ชื่อกลุ่ม");
     if (selectedUsers.length === 0) return alert("กรุณาเลือกเพื่อนเข้ากลุ่ม");
@@ -134,7 +153,8 @@ const Sidebar = ({ setSelectedChat }) => {
     try {
       const members = [currentUser.uid, ...selectedUsers];
       
-      const newGroupRef = await addDoc(collection(db, "chats"), {
+      // สร้างกลุ่ม
+      await addDoc(collection(db, "chats"), {
         groupName: groupName,
         isGroup: true,
         members: members,
@@ -145,14 +165,15 @@ const Sidebar = ({ setSelectedChat }) => {
         unreadCount: {} 
       });
 
+      // รีเซ็ตค่าและกลับไปหน้าแชท
       setShowGroupModal(false);
       setGroupName("");
       setSelectedUsers([]);
-      // เปลี่ยนกลับมาหน้า Chats เพื่อให้เห็นกลุ่มใหม่
-      setActiveTab("chats");
+      setActiveTab("chats"); // เด้งกลับมาหน้าแชททันที
       
     } catch (error) {
       console.error("Error creating group:", error);
+      alert("เกิดข้อผิดพลาด: " + error.message);
     }
   };
 
@@ -166,18 +187,19 @@ const Sidebar = ({ setSelectedChat }) => {
 
   return (
     <div className="sidebar">
-      {/* 1. Header (User Info) */}
+      {/* Header Profile */}
       <div className="sidebar-header-profile">
         <div className="user-info">
-            <span className="user-email">{currentUser?.email}</span>
+            <span className="user-email">
+              {currentUser?.email}
+            </span>
         </div>
         <div className="header-actions">
-            <button className="profile-btn">Profile</button>
             <button className="logout-btn" onClick={() => signOut(auth)}>Logout</button>
         </div>
       </div>
 
-      {/* 2. Tabs Switcher */}
+      {/* Tabs Switcher */}
       <div className="sidebar-tabs">
         <button 
             className={`tab-btn ${activeTab === "chats" ? "active" : ""}`}
@@ -193,48 +215,50 @@ const Sidebar = ({ setSelectedChat }) => {
         </button>
       </div>
 
-      {/* 3. Action Bar (เฉพาะหน้า Chats) เพื่อวางปุ่มสร้างกลุ่ม */}
       {activeTab === "chats" && (
           <div className="chats-action-bar">
               <span>รายการแชท</span>
-              <button 
-                className="create-group-icon-btn" 
-                onClick={() => setShowGroupModal(true)}
-                title="สร้างกลุ่มใหม่"
-              >
-                  +
-              </button>
+              <button className="create-group-icon-btn" onClick={() => setShowGroupModal(true)} title="สร้างกลุ่มใหม่">+</button>
           </div>
       )}
 
-      {/* 4. List Content */}
+      {/* Chat List */}
       <div className="chat-list">
-        {loading ? <p className="loading-text">กำลังโหลด...</p> : (
+        {loading ? (
+           <p className="loading-text">กำลังโหลด...</p>
+        ) : (
             <>
-                {/* แสดงรายการแชท (Chats Tab) */}
+                {/* Tab: Chats */}
                 {activeTab === "chats" && (
                     chats.length === 0 ? <p className="empty-text">ยังไม่มีการสนทนา</p> :
                     chats.map(chat => {
-                         const chatName = chat.isGroup ? chat.groupName : "User"; 
+                         const friend = getFriendData(chat);
+                         const chatName = chat.isGroup ? chat.groupName : (friend ? (friend.displayName || friend.email) : "User");
+                         const photoURL = chat.isGroup ? null : (friend?.photoURL || null);
+
                          return (
                             <div key={chat.id} className="chat-item" onClick={() => handleSelectChat(chat)}>
                                 <div className={`avatar ${chat.isGroup ? 'group' : ''}`}>
-                                    {chat.isGroup ? "G" : chatName.charAt(0).toUpperCase()}
+                                    {photoURL ? <img src={photoURL} alt="profile" /> : (chat.isGroup ? "G" : chatName.charAt(0).toUpperCase())}
                                 </div>
                                 <div className="chat-info">
                                     <div className="chat-name">{chatName}</div>
-                                    <div className="last-message">{chat.lastMessage}</div>
+                                    <div className="last-message">
+                                      {chat.lastMessage && chat.lastMessage.length > 20 ? chat.lastMessage.substring(0, 20) + "..." : chat.lastMessage}
+                                    </div>
                                 </div>
                             </div>
                          );
                     })
                 )}
 
-                {/* แสดงรายชื่อผู้ใช้ทั้งหมด (All Users Tab) */}
+                {/* Tab: All Users */}
                 {activeTab === "users" && (
                     users.map(user => (
                         <div key={user.uid} className="chat-item" onClick={() => handleSelectUser(user)}>
-                            <div className="avatar">{user.email?.charAt(0).toUpperCase()}</div>
+                            <div className="avatar">
+                                {user.photoURL ? <img src={user.photoURL} alt="profile" /> : user.email?.charAt(0).toUpperCase()}
+                            </div>
                             <div className="chat-info">
                                 <div className="chat-name">{user.displayName || user.email}</div>
                                 <div className="last-message">คลิกเพื่อเริ่มแชท</div>
@@ -246,7 +270,7 @@ const Sidebar = ({ setSelectedChat }) => {
         )}
       </div>
 
-      {/* 5. Modal สร้างกลุ่ม */}
+      {/* Modal สร้างกลุ่ม */}
       {showGroupModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -255,22 +279,12 @@ const Sidebar = ({ setSelectedChat }) => {
                 <button className="close-btn" onClick={() => setShowGroupModal(false)}>×</button>
             </div>
             <div className="modal-body">
-                <input 
-                    type="text" 
-                    placeholder="ชื่อกลุ่ม..." 
-                    className="group-name-input"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                />
+                <input type="text" placeholder="ชื่อกลุ่ม..." className="group-name-input" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
                 <div className="user-selection-list">
                     <p>เลือกสมาชิก:</p>
                     {users.map(user => (
                         <div key={user.uid} className="user-checkbox-item">
-                            <input 
-                                type="checkbox"
-                                checked={selectedUsers.includes(user.uid)}
-                                onChange={() => toggleUserSelection(user.uid)}
-                            />
+                            <input type="checkbox" checked={selectedUsers.includes(user.uid)} onChange={() => toggleUserSelection(user.uid)} />
                             <label>{user.displayName || user.email}</label>
                         </div>
                     ))}

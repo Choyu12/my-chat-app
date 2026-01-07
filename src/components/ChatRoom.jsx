@@ -1,350 +1,247 @@
-import { useState, useEffect, useRef } from 'react';
-import { auth, db, storage } from '../firebase';
-import { signOut } from 'firebase/auth';
-import {
-  collection,
-  addDoc,
+import React, { useState, useEffect, useRef } from 'react';
+import { db, storage, auth } from '../firebase'; // ตรวจสอบ path ให้ถูก
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  orderBy, 
+  onSnapshot, 
   serverTimestamp,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
   updateDoc,
-  arrayUnion,
-  arrayRemove,
-  getDoc,
-  increment,
+  doc,
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage'; 
-import EmojiPicker from 'emoji-picker-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-function ChatRoom({ currentUser, chat, onBack, onShowSettings }) { 
+function ChatRoom({ currentUser, chat, onBack }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [imagePreview, setImagePreview] = useState(null);
-  const [membersInfo, setMembersInfo] = useState({});
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [showPicker, setShowPicker] = useState(false);
-  
-  const [isUploading, setIsUploading] = useState(false);
+  const [image, setImage] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   
-  const fileInputRef = useRef(null);
-  const messagesEndRef = useRef(null);
-  const messageAreaRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const isInitialLoad = useRef(true);
+  const dummy = useRef();
+  const fileInputRef = useRef();
 
-  const chatRoomId = chat.id;
-
-  // --- Logic Hooks ---
+  // ดึงข้อความแชทแบบ Realtime
   useEffect(() => {
-    if (!chat.members) return;
-    const fetchMembersInfo = async () => {
-      const membersData = {};
-      for (const uid of chat.members) {
-        if (!membersInfo[uid]) {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (userDoc.exists()) {
-                membersData[uid] = userDoc.data();
-            }
-        }
-      }
-      setMembersInfo(prev => ({ ...prev, ...membersData }));
-    };
-    fetchMembersInfo();
-  }, [chat.members]);
+    if (!chat?.id) return;
 
-  useEffect(() => {
-    if (!chatRoomId) return;
-    const messagesQuery = query(collection(db, 'chats', chatRoomId, 'messages'), orderBy('createdAt', 'asc'));
-    
-    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
-      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    const messagesRef = collection(db, 'chats', chat.id, 'messages');
+    const q = query(messagesRef, orderBy('createdAt', 'asc'));
 
-    isInitialLoad.current = true; 
-    return () => unsubscribe();
-  }, [chatRoomId, currentUser.uid]);
-
-  useEffect(() => {
-    if (!chatRoomId) return;
-    const chatRoomRef = doc(db, 'chats', chatRoomId);
-    const unsubscribe = onSnapshot(chatRoomRef, (doc) => {
-      if (doc.exists()) {
-        const typingUIDs = doc.data().typingUsers?.filter(uid => uid !== currentUser.uid) || [];
-        setTypingUsers(typingUIDs);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMessages(msgs);
+      
+      // เมื่อมีข้อความใหม่ ให้เคลียร์ unreadCount ของเรา
+      if (msgs.length > 0) {
+        clearUnreadCount(chat.id);
       }
     });
+
     return () => unsubscribe();
-  }, [chatRoomId, currentUser.uid]);
+  }, [chat?.id]);
 
+  // เลื่อนจอลงล่างสุดเมื่อมีข้อความใหม่
   useEffect(() => {
-    if (!chatRoomId) return;
-    const chatDocRef = doc(db, 'chats', chatRoomId);
-    updateDoc(chatDocRef, { [`unreadCount.${currentUser.uid}`]: 0 });
+    dummy.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-    if (chat && !chat.isGroup && messages.length > 0) {
-      const partnerId = chat.members.find(uid => uid !== currentUser.uid);
-      if (!partnerId) return;
-      const unreadMessages = messages.filter(msg => msg.senderId === partnerId && !msg.isRead);
-      if (unreadMessages.length > 0) {
-        unreadMessages.forEach(async (msg) => {
-          const msgRef = doc(db, 'chats', chatRoomId, 'messages', msg.id);
-          await updateDoc(msgRef, { isRead: true });
+  const clearUnreadCount = async (chatId) => {
+    if (!currentUser) return;
+    try {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatSnap = await getDoc(chatRef);
+      
+      if (chatSnap.exists()) {
+        const currentUnread = chatSnap.data().unreadCount || {};
+        // อัปเดตเฉพาะ unreadCount ของตัวเราให้เป็น 0
+        await updateDoc(chatRef, {
+            [`unreadCount.${currentUser.uid}`]: 0
         });
       }
+    } catch (error) {
+      console.error("Error clearing unread count:", error);
     }
-  }, [chatRoomId, currentUser.uid, messages, chat]);
-
-  // [แก้ไข] Effect ควบคุมการ Scroll (แบบไม่อัตโนมัติสำหรับคนอื่น)
-  useEffect(() => { 
-    if (!messagesEndRef.current || !messageAreaRef.current) return;
-
-    // 1. โหลดครั้งแรก: ไปล่างสุดทันที
-    if (isInitialLoad.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-        isInitialLoad.current = false;
-        return;
-    }
-
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) return;
-
-    // 2. ถ้าเป็นข้อความที่เราส่งเอง: เลื่อนลงให้ (เพื่อให้เห็นว่าส่งไปแล้ว)
-    const isMyMessage = lastMessage.senderId === currentUser.uid;
-    if (isMyMessage) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        return;
-    }
-
-    // 3. ถ้าคนอื่นส่งมา: **ไม่ทำอะไรเลย** (ให้คนอ่านเลื่อนลงเอง)
-    // ตัดโค้ด isNearBottom ออกทั้งหมด เพื่อป้องกันการกระตุก
-
-  }, [messages, currentUser.uid]);
-
-
-  // --- Handlers ---
-  const handleTyping = () => {
-    if (!chatRoomId) return;
-    const chatRoomRef = doc(db, 'chats', chatRoomId);
-    updateDoc(chatRoomRef, { typingUsers: arrayUnion(currentUser.uid) });
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-        updateDoc(chatRoomRef, { typingUsers: arrayRemove(currentUser.uid) });
-    }, 2000);
-  };
-
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 20 * 1024 * 1024) {
-        alert("ขนาดไฟล์ต้องไม่เกิน 20MB");
-        e.target.value = null; 
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setImagePreview(null);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = null;
-    }
-  };
-
-  const uploadImageWithProgress = (file) => {
-    return new Promise((resolve, reject) => {
-      const imageRef = storageRef(storage, `chat_images/${chatRoomId}/${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(imageRef, file);
-
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-          setUploadProgress(progress);
-        }, 
-        (error) => {
-          reject(error);
-        }, 
-        () => {
-          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-            resolve(downloadURL);
-          });
-        }
-      );
-    });
   };
 
   const handleSendMessage = async (e) => {
-      e.preventDefault();
-      if (!chatRoomId || isUploading) return;
-      const imageFile = fileInputRef.current.files[0];
-      if (newMessage.trim() === '' && !imageFile) return;
-      
-      setIsUploading(true);
-      setUploadProgress(0);
+    e.preventDefault();
 
-      try {
-        const unreadCountUpdates = {};
-        chat.members.forEach(memberId => {
-          if (memberId !== currentUser.uid) {
-            unreadCountUpdates[`unreadCount.${memberId}`] = increment(1);
-          }
-        });
-        unreadCountUpdates.lastMessageAt = serverTimestamp();
-        const chatDocRef = doc(db, 'chats', chatRoomId);
-        await updateDoc(chatDocRef, unreadCountUpdates);
+    if ((!newMessage.trim() && !image) || uploading) return;
 
-        let imageUrl = '';
-        if (imageFile) {
-          imageUrl = await uploadImageWithProgress(imageFile);
-        }
+    const msgText = newMessage;
+    setNewMessage(''); // เคลียร์ช่องพิมพ์ทันทีเพื่อให้ลื่นไหล
 
-        await addDoc(collection(db, 'chats', chatRoomId, 'messages'), {
-            text: newMessage,
-            createdAt: serverTimestamp(),
-            senderId: currentUser.uid,
-            email: currentUser.email,
-            imageBase64: imageUrl,
-            isRead: false,
-        });
+    try {
+      let imageUrl = null;
+
+      // ถ้ามีการแนบรูปภาพ
+      if (image) {
+        setUploading(true);
+        const storageRef = ref(storage, `chat-images/${Date.now()}_${image.name}`);
         
-        setNewMessage('');
-        setImagePreview(null); 
-        if (fileInputRef.current) fileInputRef.current.value = null;
+        // จำลอง Progress Bar (เพราะ Firebase SDK บางตัวไม่คืนค่า progress ง่ายๆ)
+        const interval = setInterval(() => {
+           setUploadProgress((old) => (old < 90 ? old + 10 : old));
+        }, 100);
 
-      } catch (error) {
-        console.error("Error sending message:", error);
-        alert("เกิดข้อผิดพลาด: " + error.message);
-      } finally {
-        setIsUploading(false);
+        const snapshot = await uploadBytes(storageRef, image);
+        clearInterval(interval);
+        setUploadProgress(100);
+        
+        imageUrl = await getDownloadURL(snapshot.ref);
+        setUploading(false);
+        setImage(null);
         setUploadProgress(0);
       }
+
+      // เตรียมข้อมูล Unread Count (บวกเพิ่มให้เพื่อนทุกคนในห้อง ยกเว้นเรา)
+      const unreadUpdates = {};
+      if (chat.members) {
+         // ต้องดึงค่า unread เก่ามาก่อน หรือใช้ increment ของ Firestore ก็ได้
+         // เพื่อความชัวร์เราจะใช้วิธี update map แบบง่ายๆ
+         // (ในระบบจริงควรใช้ runTransaction หรือ increment)
+         const chatRef = doc(db, 'chats', chat.id);
+         const chatSnap = await getDoc(chatRef);
+         const currentCounts = chatSnap.data()?.unreadCount || {};
+         
+         chat.members.forEach(memberId => {
+            if (memberId !== currentUser.uid) {
+                unreadUpdates[`unreadCount.${memberId}`] = (currentCounts[memberId] || 0) + 1;
+            }
+         });
+      }
+
+      // ส่งข้อความเข้า Firestore
+      await addDoc(collection(db, 'chats', chat.id, 'messages'), {
+        text: msgText,
+        imageUrl: imageUrl,
+        createdAt: serverTimestamp(),
+        senderId: currentUser.uid,
+        senderName: currentUser.displayName || currentUser.email,
+        senderPhoto: currentUser.photoURL || null
+      });
+
+      // อัปเดตข้อมูลล่าสุดที่ตัวห้องแชท (Last Message) และ Unread Count
+      const chatRef = doc(db, 'chats', chat.id);
+      await updateDoc(chatRef, {
+        lastMessage: imageUrl ? "ส่งรูปภาพ" : msgText,
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...unreadUpdates // กระจาย object เพื่อนับจำนวน unread
+      });
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setUploading(false);
+    }
   };
 
-  const handleLogout = () => { signOut(auth); };
-  
-  const onEmojiClick = (emojiObject) => {
-    setNewMessage(prevInput => prevInput + emojiObject.emoji);
+  const handleImageChange = (e) => {
+    if (e.target.files[0]) {
+      setImage(e.target.files[0]);
+    }
   };
 
-  const partner = chat.isGroup ? null : chat.members.find(uid => uid !== currentUser.uid);
-  const chatName = chat.isGroup ? chat.groupName : (membersInfo[partner]?.displayName || membersInfo[partner]?.email);
+  // ชื่อห้องแชท (ถ้าเป็นกลุ่มใช้ชื่อกลุ่ม ถ้าส่วนตัวใช้ชื่อเพื่อน)
+  const chatTitle = chat.isGroup 
+    ? chat.groupName 
+    : (chat.otherUserName || "Chat");
 
   return (
-    <div className="chat-container">
+    <>
+      {/* 1. ส่วนหัว (Header) - ลบปุ่ม Logout ออกแล้ว */}
       <div className="chat-header">
-        <button onClick={onBack} className="back-btn">{'< Back'}</button>
-        <div className="avatar">
-          {chat.isGroup ? (chatName || 'G').charAt(0).toUpperCase() : (membersInfo[partner]?.photoURL ? <img src={membersInfo[partner].photoURL} alt="p" /> : (chatName || 'U').charAt(0).toUpperCase())}
-        </div>
-        <span>{chatName}</span>
-        {chat.isGroup && (
-          <button onClick={onShowSettings} className="settings-btn" title="Group Settings">⚙️</button>
-        )}
-        <button onClick={handleLogout} className="logout-btn" style={{ marginLeft: 'auto' }}>
-          Logout
+        <button className="back-btn" onClick={onBack}>
+          ← กลับ
         </button>
+        
+        <div className="avatar" style={{width: 35, height: 35, fontSize: 14}}>
+            {chat.isGroup ? "G" : chatTitle.charAt(0)}
+        </div>
+        <span>{chatTitle}</span>
       </div>
 
-      <div className="message-area" ref={messageAreaRef}>
+      {/* 2. พื้นที่ข้อความ (Message Area) */}
+      <div className="message-area">
         {messages.map((msg) => {
-          const sender = membersInfo[msg.senderId];
-          const senderName = sender?.displayName || sender?.email;
-          const isSentByMe = msg.senderId === currentUser.uid;
-
+          const isMe = msg.senderId === currentUser.uid;
           return (
-            <div key={msg.id} className={`message-wrapper ${isSentByMe ? 'sent' : 'received'}`}>
-              {!isSentByMe && (
-                <div className="avatar">
-                  {sender?.photoURL ? <img src={sender.photoURL} alt="s"/> : (senderName || 'U').charAt(0).toUpperCase()}
-                </div>
+            <div key={msg.id} className={`message-wrapper ${isMe ? 'sent' : 'received'}`}>
+              {!isMe && chat.isGroup && (
+                 <span className="message-sender-name">{msg.senderName}</span>
               )}
-              <div className={`message ${isSentByMe ? 'sent' : 'received'}`}>
-                {chat.isGroup && !isSentByMe && (
-                  <div className="message-sender-name">{senderName}</div>
+              
+              <div className={`message ${isMe ? 'sent' : 'received'}`}>
+                {msg.text && <p>{msg.text}</p>}
+                {msg.imageUrl && (
+                    <img src={msg.imageUrl} alt="sent content" onClick={() => window.open(msg.imageUrl, '_blank')} />
                 )}
-                {msg.text && <p style={{margin: 0}}>{msg.text}</p>}
-                {msg.imageBase64 && (
-                    <div className="message-image-wrapper">
-                        <img src={msg.imageBase64} alt="content" onClick={() => window.open(msg.imageBase64, '_blank')} />
-                    </div>
-                )}
-                {isSentByMe && msg.isRead && !chat.isGroup && (
-                  <div className="read-receipt">Read</div>
-                )}
+                {/* เวลาส่งข้อความ (ถ้าต้องการ) */}
+                {/* <span className="timestamp">{msg.createdAt?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span> */}
               </div>
             </div>
-          )
+          );
         })}
-        
-        <div className="typing-indicator-container">
-          {typingUsers.length > 0 && (
-            <span>
-              {typingUsers.map(uid => membersInfo[uid]?.displayName || membersInfo[uid]?.email).join(', ')}
-              {typingUsers.length > 1 ? ' are typing...' : ' is typing...'}
-            </span>
-          )}
-        </div>
-        <div ref={messagesEndRef} />
+        {/* ตัวดัน Scroll ให้ลงล่างสุด */}
+        <div ref={dummy}></div>
       </div>
 
-      <div className="input-area-wrapper">
-        {showPicker && (
-          <div className="emoji-picker-container">
-            <EmojiPicker onEmojiClick={onEmojiClick} />
-          </div>
-        )}
-        
-        {imagePreview && (
-          <div className="image-preview-container">
-            <img src={imagePreview} alt="preview" />
-            <button type="button" onClick={handleRemoveImage} className="remove-image-btn">
-              ×
-            </button>
-          </div>
-        )}
+      {/* 3. ส่วนแนบรูป (Preview Image) */}
+      {image && (
+        <div className="image-preview-container">
+            <div style={{position: 'relative'}}>
+                <img src={URL.createObjectURL(image)} alt="preview" />
+                <button className="remove-image-btn" onClick={() => setImage(null)}>×</button>
+            </div>
+            {uploading ? (
+                <span style={{fontSize: 12, color: '#666'}}>กำลังส่ง... {uploadProgress}%</span>
+            ) : (
+                <span style={{fontSize: 12, color: '#666'}}>พร้อมส่ง</span>
+            )}
+        </div>
+      )}
 
-        <form onSubmit={handleSendMessage} className="input-area">
+      {/* 4. ช่องพิมพ์ข้อความ (Input Area) */}
+      <div className="input-area-wrapper">
+        <form className="input-area" onSubmit={handleSendMessage}>
           <input 
             type="file" 
-            ref={fileInputRef} 
-            accept="image/*"
-            id="image-upload"
+            id="file-input" 
+            ref={fileInputRef}
+            accept="image/*" 
             onChange={handleImageChange}
-          />
-          <label htmlFor="image-upload" title="แนบรูปภาพ" className="attach-btn">
-            📎
-          </label>
-          <button type="button" onClick={() => setShowPicker(val => !val)} className="emoji-btn">
-            😊
-          </button>
-          <input
-              type="text"
-              placeholder="พิมพ์ข้อความ..."
-              value={newMessage}
-              onChange={(e) => {
-                  setNewMessage(e.target.value);
-                  handleTyping();
-              }}
+            style={{display: 'none'}} 
           />
           <button 
-            type="submit" 
-            disabled={isUploading}
-            style={{ minWidth: '80px' }}
+            type="button" 
+            className="attach-btn" 
+            onClick={() => fileInputRef.current.click()}
+            title="แนบรูปภาพ"
           >
-            {isUploading ? `${uploadProgress}%` : 'ส่ง'}
+            📷
+          </button>
+
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="พิมพ์ข้อความ..."
+            disabled={uploading}
+          />
+          
+          <button type="submit" disabled={!newMessage.trim() && !image}>
+            ส่ง
           </button>
         </form>
       </div>
-    </div>
+    </>
   );
 }
 

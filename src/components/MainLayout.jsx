@@ -1,135 +1,111 @@
-import { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import ChatList from './ChatList';
-import ChatRoom from './ChatRoom';
-import ProfileScreen from './ProfileScreen';
-import CreateGroupScreen from './CreateGroupScreen';
-import GroupSettingsScreen from './GroupSettingsScreen';
+import React, { useState, useEffect, useRef } from "react";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../firebase"; // ตรวจสอบ path ให้ถูกต้อง
+import Sidebar from "./Sidebar";
+import ChatRoom from "./ChatRoom";
 
-function MainLayout({ currentUser }) {
-  const [chats, setChats] = useState([]);
+const MainLayout = ({ currentUser }) => {
   const [selectedChat, setSelectedChat] = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [showGroupSettings, setShowGroupSettings] = useState(false);
-  const prevTotalUnreadCount = useRef(0);
-  const isInitialLoad = useRef(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const prevUnreadCount = useRef(0);
 
-  // [ส่วนการทำงาน] ดึง "ห้องแชท" ทั้งหมดที่ currentUser เป็นสมาชิก
+  // 1. ตรวจสอบขนาดหน้าจอ (เพื่อปรับ Layout มือถือ/คอม)
   useEffect(() => {
-    if (!currentUser.uid) return;
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-    const q = query(collection(db, 'chats'), where('members', 'array-contains', currentUser.uid));
+  // 2. ระบบเสียงแจ้งเตือน (Global Sound Notification)
+  // ฟังข้อมูลแชททั้งหมด เพื่อดูว่ามีข้อความใหม่ (Unread) เพิ่มขึ้นไหม
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const q = query(
+      collection(db, "chats"),
+      where("members", "array-contains", currentUser.uid)
+    );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const chatsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setChats(chatsData);
+      let totalUnread = 0;
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        if (data.unreadCount && data.unreadCount[currentUser.uid]) {
+          totalUnread += data.unreadCount[currentUser.uid];
+        }
+      });
+
+      // ถ้าจำนวนที่ยังไม่อ่าน "เพิ่มขึ้น" ให้เล่นเสียง
+      if (totalUnread > prevUnreadCount.current) {
+        try {
+          const audio = new Audio("/notification.mp3");
+          audio.play().catch((err) => console.log("Audio play error:", err));
+        } catch (e) {
+          console.error("Sound error", e);
+        }
+      }
+      prevUnreadCount.current = totalUnread;
     });
 
     return () => unsubscribe();
-  }, [currentUser.uid]);
+  }, [currentUser]);
 
-  // [ส่วนการทำงาน] เล่นเสียงแจ้งเตือนแบบ Global
-  useEffect(() => {
-    // คำนวณจำนวนข้อความที่ยังไม่อ่านทั้งหมด
-    const currentTotalUnreadCount = chats.reduce((sum, chat) => {
-      return sum + (chat.unreadCount ? chat.unreadCount[currentUser.uid] : 0);
-    }, 0);
-
-    // ถ้าเป็นการโหลดครั้งแรก ให้แค่บันทึกค่าไว้
-    if (isInitialLoad.current) {
-        prevTotalUnreadCount.current = currentTotalUnreadCount;
-        isInitialLoad.current = false;
-        return;
-    }
-    
-    // ถ้าจำนวนที่ยังไม่อ่าน "เพิ่มขึ้น" จากครั้งก่อนหน้า แสดงว่ามีข้อความใหม่เข้ามา
-    if (currentTotalUnreadCount > prevTotalUnreadCount.current) {
-      new Audio('/notification.mp3').play().catch(e => console.log("Audio play failed.", e));
-    }
-    
-    // อัปเดตค่าล่าสุดไว้สำหรับการเปรียบเทียบครั้งต่อไป
-    prevTotalUnreadCount.current = currentTotalUnreadCount;
-  }, [chats, currentUser.uid]);
-
-  // [ส่วนการทำงาน] ฟังก์ชันสำหรับกลับไปหน้าหลัก
+  // ฟังก์ชันกดปุ่ม Back (สำหรับมือถือ)
   const handleBack = () => {
     setSelectedChat(null);
-    setShowProfile(false);
-    setShowCreateGroup(false);
-    setShowGroupSettings(false);
   };
-
-  // [ส่วนการทำงาน] ฟังก์ชันสำหรับเลือกแชท
-  const handleSelectChat = (chatObject) => {
-    setShowProfile(false);
-    setShowCreateGroup(false);
-    setShowGroupSettings(false);
-    setSelectedChat(chatObject);
-  };
-
-  // [ส่วนการทำงาน] ฟังก์ชันสำหรับเปิดหน้าโปรไฟล์
-  const handleShowProfile = () => {
-    setSelectedChat(null);
-    setShowCreateGroup(false);
-    setShowGroupSettings(false);
-    setShowProfile(true);
-  };
-  
-  // [ส่วนการทำงาน] ฟังก์ชันสำหรับเปิดหน้าสร้างกลุ่ม
-  const handleShowCreateGroup = () => {
-    setSelectedChat(null);
-    setShowProfile(false);
-    setShowGroupSettings(false);
-    setShowCreateGroup(true);
-  };
-
-  // [ส่วนการทำงาน] ฟังก์ชันสำหรับเปิดหน้าตั้งค่ากลุ่ม
-  const handleShowGroupSettings = () => {
-    setShowGroupSettings(true);
-  };
-
-  // [ส่วนการทำงาน] ฟังก์ชันหลักในการเลือกแสดง Component ฝั่งขวา
-  const renderRightPanel = () => {
-    if (showGroupSettings && selectedChat) {
-      return <GroupSettingsScreen currentUser={currentUser} chat={selectedChat} onBack={handleBack} />;
-    }
-    if (showCreateGroup) {
-      return <CreateGroupScreen currentUser={currentUser} onBack={handleBack} onGroupCreated={handleBack} />;
-    }
-    if (showProfile) {
-      return <ProfileScreen currentUser={currentUser} onBack={handleBack} />;
-    }
-    if (selectedChat) {
-      return <ChatRoom currentUser={currentUser} chat={selectedChat} onBack={handleBack} onShowSettings={handleShowGroupSettings} />;
-    }
-    return (
-      <div className="welcome-screen">
-        <h2>เลือกแชทเพื่อเริ่มการสนทนา</h2>
-      </div>
-    );
-  };
-
-  const isRightPanelActive = selectedChat || showProfile || showCreateGroup || showGroupSettings;
 
   return (
-    <div className="main-layout">
-      <div className={`sidebar ${isRightPanelActive ? '' : 'active'}`}>
-        <ChatList 
-          currentUser={currentUser} 
-          chats={chats} // ส่ง 'chats' ที่ดึงมาแล้วลงไป
-          onSelectChat={handleSelectChat} 
-          onShowProfile={handleShowProfile} 
-          onShowCreateGroup={handleShowCreateGroup}
-          selectedChat={selectedChat}
-        />
+    <div className="main-layout" style={{ overflow: "hidden" }}>
+      {/* Style Block พิเศษ:
+         บังคับ CSS สำหรับ Layout นี้โดยเฉพาะ เพื่อแก้ปัญหา Sidebar บนมือถือ
+         โดยไม่ต้องไปแก้ไฟล์ style.css หลัก
+      */}
+      <style>{`
+        @media (max-width: 768px) {
+          .sidebar-wrapper {
+            width: 100% !important;
+            display: ${selectedChat ? "none" : "flex"} !important;
+            flex: 1;
+          }
+          /* บังคับให้ Sidebar ภายในยืดเต็มจอ */
+          .sidebar-wrapper .sidebar {
+            width: 100% !important;
+            min-width: 0 !important;
+            border-right: none !important;
+          }
+          .chat-window-wrapper {
+            width: 100% !important;
+            display: ${selectedChat ? "flex" : "none"} !important;
+            flex: 1;
+            height: 100%;
+          }
+        }
+      `}</style>
+
+      {/* --- ส่วน Sidebar (ด้านซ้าย) --- */}
+      <div className="sidebar-wrapper">
+        <Sidebar setSelectedChat={setSelectedChat} />
       </div>
-      
-      <div className={`chat-window ${isRightPanelActive ? 'active' : ''}`}>
-        {renderRightPanel()}
+
+      {/* --- ส่วน Chat Room (ด้านขวา) --- */}
+      <div className="chat-window-wrapper chat-window">
+        {selectedChat ? (
+          <ChatRoom
+            currentUser={currentUser}
+            data={selectedChat} // ส่งข้อมูลห้องแชทไป
+            chat={selectedChat} // เผื่อ ChatRoom ใช้ชื่อ prop นี้
+            onBack={handleBack}
+          />
+        ) : (
+          <div className="welcome-screen">
+            <h2>ยินดีต้อนรับสู่ Sonthana</h2>
+            <p>เลือกแชทเพื่อเริ่มการสนทนา</p>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};
 
 export default MainLayout;
