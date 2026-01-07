@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, auth, rtdb } from '../firebase';
-import { collection, onSnapshot, query, where, addDoc, getDocs, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc, getDocs, serverTimestamp, getDoc, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 
@@ -33,7 +33,14 @@ function ChatList({ currentUser, onSelectChat, onShowProfile, onShowCreateGroup,
   // [ส่วนการทำงาน] Effect 2: ดึง "ห้องแชท" ทั้งหมดที่ currentUser เป็นสมาชิก
   useEffect(() => {
     if (!currentUser.uid) return;
-    const q = query(collection(db, 'chats'), where('members', 'array-contains', currentUser.uid));
+    
+    // เรียงแชทตามข้อความล่าสุด (ต้องสร้าง Index ก่อนถึงจะทำงาน)
+    const q = query(
+      collection(db, 'chats'), 
+      where('members', 'array-contains', currentUser.uid),
+      orderBy('lastMessageAt', 'desc') 
+    );
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setChats(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -60,11 +67,12 @@ function ChatList({ currentUser, onSelectChat, onShowProfile, onShowCreateGroup,
     const querySnapshot = await getDocs(chatQuery);
     
     if (querySnapshot.empty) {
-      // ถ้ายังไม่มีห้องแชท -> สร้างใหม่พร้อม unreadCount
+      // ถ้ายังไม่มีห้องแชท -> สร้างใหม่
       const unreadCount = { [currentUser.uid]: 0, [targetUser.uid]: 0 };
       const newChatRef = await addDoc(collection(db, 'chats'), {
         members: members,
         createdAt: serverTimestamp(),
+        lastMessageAt: serverTimestamp(),
         isGroup: false,
         typingUsers: [],
         unreadCount: unreadCount,
@@ -88,7 +96,7 @@ function ChatList({ currentUser, onSelectChat, onShowProfile, onShowCreateGroup,
       <div className="home-header">
         <span>{currentUser.displayName || currentUser.email}</span>
         <div>
-          <button onClick={onShowCreateGroup} className="new-group-btn" title="Create Group">➕</button>
+          {/* ลบปุ่มบวกออกแล้ว */}
           <button onClick={onShowProfile} className="profile-btn">Profile</button>
           <button onClick={handleLogout} className="logout-btn">Logout</button>
         </div>
@@ -119,8 +127,9 @@ function ChatList({ currentUser, onSelectChat, onShowProfile, onShowCreateGroup,
                     ) : (
                       (chatName || 'C').charAt(0).toUpperCase()
                     )}
+                    {/* จุดเขียว (ย้ายเข้ามาไว้ข้างใน user-avatar) */}
+                    {!chat.isGroup && isOnline && <div className="online-indicator"></div>}
                   </div>
-                  {!chat.isGroup && isOnline && <div className="online-indicator"></div>}
                 </div>
                 <div className="user-info">
                   <span className="user-email">{chatName}</span>
@@ -138,7 +147,16 @@ function ChatList({ currentUser, onSelectChat, onShowProfile, onShowCreateGroup,
             const userName = user.displayName || user.email;
             
             return (
-              <div key={user.uid} className="user-item" onClick={() => handleStartNewChat(user)}>
+              <div 
+                key={user.uid} 
+                className="user-item" 
+                onClick={() => handleStartNewChat(user)}
+                // คลิกขวาเพื่อสร้างกลุ่ม
+                onContextMenu={(e) => {
+                  e.preventDefault(); 
+                  onShowCreateGroup(); 
+                }}
+              >
                 <div className="user-avatar-wrapper">
                   <div className="user-avatar">
                     {user.photoURL ? (
@@ -146,8 +164,9 @@ function ChatList({ currentUser, onSelectChat, onShowProfile, onShowCreateGroup,
                     ) : (
                       (userName).charAt(0).toUpperCase()
                     )}
+                    {/* จุดเขียว (ย้ายเข้ามาไว้ข้างใน user-avatar) */}
+                    {isOnline && <div className="online-indicator"></div>}
                   </div>
-                  {isOnline && <div className="online-indicator"></div>}
                 </div>
                 <div className="user-info">
                     <span className="user-email">{userName}</span>

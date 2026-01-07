@@ -29,8 +29,8 @@ function ProfileScreen({ currentUser, onBack }) {
     if (e.target.files[0]) {
       const file = e.target.files[0];
       
-      if (file.size > 2 * 1024 * 1024) { // จำกัดขนาดไฟล์ที่ 2MB
-        alert('ขนาดไฟล์ต้องไม่เกิน 2MB');
+      if (file.size > 13 * 7000 * 7000 ) { // จำกัดขนาดไฟล์ที่ 13MB
+        alert('ขนาดไฟล์ต้องไม่เกิน 13MB');
         return;
       }
       
