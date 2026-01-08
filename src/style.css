@@ -1,55 +1,72 @@
-/* ==================== 1. Design System & Variables ==================== */
+/* ==========================================================================
+   1. Design System & Variables (ตั้งค่าสีและตัวแปรหลัก)
+   ========================================================================== */
 :root {
+  /* สีหลักของแอป (โทนน้ำเงิน) */
   --primary-color: #2563eb;
   --primary-hover: #1d4ed8;
   --primary-light: #dbeafe;
-  --accent-color: #10b981;
-  --accent-hover: #059669;
+  
+  /* สีแจ้งเตือน/สถานะออนไลน์ (เขียว/แดง) */
+  --accent-color: #10b981; /* สีเขียวสำหรับสถานะออนไลน์ */
+  --danger-color: #ef4444; /* สีแดงสำหรับแจ้งเตือน */
+
+  /* สีพื้นหลังและตัวอักษร */
   --background: #f8fafc;
   --surface: #ffffff;
   --border: #e2e8f0;
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-tertiary: #94a3b8;
+
+  /* เงาและความโค้งมน */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-  --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
   --radius-xl: 20px;
+  
+  /* เอฟเฟกต์การเปลี่ยนสี (Transition) */
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* รีเซ็ตค่าเริ่มต้นของ Browser */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: 'Kanit', sans-serif;
-  background: linear-gradient(135deg, #455cc0 0%, #347aa2 100%);
+  background: linear-gradient(135deg, #455cc0 0%, #347aa2 100%); /* พื้นหลังไล่สี */
   color: var(--text-primary);
   font-size: 15px;
   line-height: 1.6;
+  
+  /* [Mobile Fix] ใช้ Dynamic Viewport Height แก้ปัญหาบาร์ Browser บังในมือถือ */
   height: 100vh;
-  overflow: hidden; /* ป้องกัน Scroll ซ้อนที่ Body */
+  height: 100dvh; 
+  overflow: hidden; /* ห้ามเลื่อนที่ Body (ให้เลื่อนเฉพาะจุดที่กำหนด) */
 }
 
-/* ==================== 2. Layout & Containers ==================== */
+/* ==========================================================================
+   2. Layout & Containers (โครงสร้างหลัก)
+   ========================================================================== */
+/* คอนเทนเนอร์นอกสุด จัดกึ่งกลางหน้าจอ */
 .app-container {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 20px;
 }
 
+/* กรอบหลักของแอป (กระจกฝ้า Glassmorphism) */
 .main-layout {
   display: flex;
   width: 100%;
   max-width: 1400px;
-  height: 90vh;
-  background: rgba(255, 255, 255, 0.85); /* Glass Effect */
-  backdrop-filter: blur(12px);
+  height: 90vh; /* ใน PC ให้มีความสูง 90% ของจอ */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px); /* เบลอฉากหลัง */
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -57,7 +74,7 @@ body {
   margin: 0 auto;
 }
 
-/* Sidebar Wrapper */
+/* แถบด้านซ้าย (รายชื่อแชท) */
 .sidebar {
   width: 380px;
   min-width: 380px;
@@ -65,225 +82,57 @@ body {
   border-right: 1px solid rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
-  height: 100%;       /* [สำคัญ] บังคับให้สูงเต็มกรอบ */
-  overflow: hidden;   /* [สำคัญ] ห้ามล้นกรอบ */
+  height: 100%;
+  overflow: hidden;
 }
 
-/* Chat Window Wrapper */
+/* หน้าต่างแชทขวามือ */
 .chat-window {
-  flex: 1;
+  flex: 1; /* ยืดให้เต็มพื้นที่ที่เหลือ */
   display: flex;
   flex-direction: column;
-  height: 100%;       /* ยืดเต็มความสูง */
-  overflow: hidden;   /* ห้ามล้น */
+  height: 100%;
+  overflow: hidden;
   position: relative;
   background-color: rgba(248, 250, 252, 0.5); 
 }
 
-/* ==================== 3. Login Screen ==================== */
-.login-container {
-  background-color: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  padding: 48px 40px;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  text-align: center;
-  width: 100%;
-  max-width: 420px;
-}
-
-.login-container h1 {
-  margin-bottom: 32px;
-  font-size: 32px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, #347aa2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.login-form { display: flex; flex-direction: column; gap: 16px; }
-
-.login-form input {
-  width: 100%;
-  padding: 16px 20px;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 15px;
-  font-family: inherit;
-}
-
-.login-form button {
-  width: 100%;
-  padding: 16px 24px;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-  color: white;
-}
-
-.login-form button:first-of-type { background: var(--primary-color); }
-.login-form button:last-of-type { background: var(--accent-color); }
-.login-form button:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-
-/* ==================== 4. Sidebar Components ==================== */
-/* Header Profile */
-.sidebar-header-profile {
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: white;
-  border-bottom: 1px solid #f0f0f0;
-  flex-shrink: 0; /* ห้ามหด */
-}
-
-.user-email { font-weight: bold; font-size: 14px; color: #333; }
-
-.header-actions button {
-  margin-left: 5px;
-  font-size: 12px;
-  padding: 5px 10px;
-  border: 1px solid #ddd;
-  background: transparent;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-/* Tabs Switcher */
-.sidebar-tabs {
-  display: flex;
-  padding: 10px 15px;
-  gap: 10px;
-  background: #f9fafb;
-  flex-shrink: 0; /* ห้ามหด */
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 8px;
-  border: none;
-  background: #e5e7eb;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  color: #666;
-  transition: 0.2s;
-}
-
-.tab-btn.active {
-  background: #ffffff;
-  color: var(--primary-color);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-/* Chats Action Bar (+) */
-.chats-action-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  font-size: 13px;
-  color: #888;
-  flex-shrink: 0;
-}
-
-.create-group-icon-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  font-size: 18px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.create-group-icon-btn:hover { transform: scale(1.1); background: var(--primary-hover); }
-
-/* Chat List Items */
-.chat-list {
-  flex: 1;            /* ยืดเต็มพื้นที่ที่เหลือ */
-  overflow-y: auto;   /* ให้ Scroll ได้เฉพาะส่วนนี้ */
-  min-height: 0;      /* แก้ Bug Flexbox ไม่ Scroll */
-  padding: 10px;
-}
-
-.chat-item {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: var(--transition);
-  margin-bottom: 4px;
-}
-
-.chat-item:hover { background-color: white; box-shadow: var(--shadow-sm); }
-
-.avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #455cc0 0%, #347aa2 100%);
-  color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: 600;
-  margin-right: 12px;
-  flex-shrink: 0;
-  overflow: hidden; /* เพื่อให้รูปไม่ล้นกรอบมน */
-}
-
-.avatar.group { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-
-/* [สำคัญ] แก้ไขรูปภาพให้เต็มกรอบ */
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.chat-info { flex: 1; min-width: 0; }
-.chat-name { font-weight: 500; color: var(--text-primary); }
-.last-message { font-size: 13px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* ==================== 5. Chat Room Components ==================== */
+/* ==========================================================================
+   3. Chat Components (ส่วนประกอบในหน้าแชท)
+   ========================================================================== */
+/* ส่วนหัวของแชท (ชื่อเพื่อน/กลุ่ม) */
 .chat-header {
   display: flex;
   align-items: center;
-  padding: 16px 24px;
+  padding: 12px 20px;
   border-bottom: 1px solid rgba(0,0,0,0.05);
-  background-color: rgba(255, 255, 255, 0.5);
+  background-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(5px);
   gap: 12px;
-  flex-shrink: 0; /* Header ห้ามหด */
+  flex-shrink: 0; /* ห้ามหดตัว */
+  
+  /* [Fix Z-Index] สำคัญ! เพื่อให้เมนู 3 จุดลอยเหนือข้อความ */
+  position: relative;
+  z-index: 10;
 }
 
-.back-btn {
-  background: none; border: 1px solid #ddd; padding: 6px 10px; border-radius: 6px; cursor: pointer;
-}
+.back-btn { background: none; border: 1px solid #ddd; padding: 6px 12px; border-radius: 8px; cursor: pointer; color: #555; }
 
-/* Messages Area */
+/* พื้นที่แสดงข้อความ (Scroll ได้) */
 .message-area {
-  flex: 1;              /* ยืดให้เต็มพื้นที่ที่เหลือ */
-  overflow-y: auto;     /* ให้ Scroll ได้เฉพาะส่วนนี้ */
+  flex: 1;              
+  overflow-y: auto;     
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  -webkit-overflow-scrolling: touch; /* ลื่นไหลบน iOS */
 }
 
+/* กล่องข้อความ (Bubble) */
 .message-wrapper { display: flex; flex-direction: column; max-width: 70%; }
-.message-wrapper.sent { align-self: flex-end; align-items: flex-end; }
-.message-wrapper.received { align-self: flex-start; align-items: flex-start; }
+.message-wrapper.sent { align-self: flex-end; align-items: flex-end; } /* ของเราอยู่ขวา */
+.message-wrapper.received { align-self: flex-start; align-items: flex-start; } /* ของเขาอยู่ซ้าย */
 
 .message {
   padding: 10px 16px;
@@ -292,166 +141,162 @@ body {
   word-wrap: break-word;
   font-size: 15px;
   box-shadow: var(--shadow-sm);
+  line-height: 1.5;
 }
 
-.message.sent {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #347aa2 100%);
-  color: white;
-  border-bottom-right-radius: 2px;
+.message.sent { background: linear-gradient(135deg, var(--primary-color) 0%, #347aa2 100%); color: white; border-bottom-right-radius: 2px; }
+.message.received { background: white; color: var(--text-primary); border-bottom-left-radius: 2px; }
+.message-sender-name { font-size: 11px; color: #666; margin-bottom: 4px; margin-left: 5px; }
+
+/* [System Message] ข้อความแจ้งเตือนระบบ (กลางจอ) */
+.message-wrapper.system {
+  align-self: center !important; 
+  margin-left: auto !important; 
+  margin-right: auto !important; 
+  max-width: 90%;
+  width: fit-content;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
-.message.received {
-  background: white;
-  color: var(--text-primary);
-  border-bottom-left-radius: 2px;
+.message.system {
+  background: rgba(0, 0, 0, 0.06);
+  color: #64748b;
+  font-size: 13px;
+  padding: 6px 16px;
+  border-radius: 50px; /* ทรงวงรี */
+  box-shadow: none;
+  text-align: center;
+  border: 1px solid rgba(0,0,0,0.03);
+  word-wrap: break-word;
+  line-height: 1.4;
 }
 
+/* [Image] รูปภาพในแชท */
 .message img {
-  max-width: 300px;
+  max-width: 280px;
+  max-height: 350px;
   border-radius: 8px;
   margin-top: 5px;
   cursor: pointer;
   display: block;
+  transition: transform 0.2s;
 }
+.message img:hover { opacity: 0.95; }
 
-/* Input Area */
+/* ช่องพิมพ์ข้อความด้านล่าง */
 .input-area-wrapper {
-  flex-shrink: 0;       /* [สำคัญ] ห้ามหดตัวเด็ดขาด (ติดล่างสุด) */
-  background-color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;       
+  background-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(5px);
   border-top: 1px solid rgba(0,0,0,0.05);
   z-index: 10;
+  /* เว้นระยะด้านล่างสำหรับ iPhone รุ่นใหม่ (ที่มีขีด Home) */
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.input-area { 
-  display: flex; 
-  align-items: center; 
-  gap: 10px; 
-  padding: 16px 20px;
-}
+.input-area { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+.input-area input[type="text"] { flex: 1; padding: 12px 20px; border: 1px solid #ddd; border-radius: 24px; font-family: inherit; outline: none; font-size: 16px; }
+.input-area input[type="text"]:focus { border-color: var(--primary-color); }
+.input-area button[type="submit"] { padding: 10px 24px; border-radius: 24px; background: var(--primary-color); color: white; border: none; font-weight: 600; cursor: pointer; }
+.attach-btn { width: 40px; height: 40px; border-radius: 50%; border: none; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #555; box-shadow: var(--shadow-sm); }
 
-.input-area input[type="text"] {
-  flex: 1;
-  padding: 12px 18px;
-  border: 1px solid #ddd;
-  border-radius: 24px;
-  font-family: inherit;
-}
+/* ตัวอย่างรูปก่อนส่ง */
+.image-preview-container { padding: 10px 20px; background: rgba(255,255,255,0.6); border-top: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; gap: 10px; }
+.image-preview-container img { height: 60px; border-radius: 8px; border: 2px solid white; }
+.remove-image-btn { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%; background: var(--danger-color); color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; }
 
-.input-area button[type="submit"] {
-  padding: 10px 20px;
-  border-radius: 24px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  font-weight: 600;
-  cursor: pointer;
-}
+/* ==========================================================================
+   4. Sidebar Components (ส่วนแถบด้านซ้าย)
+   ========================================================================== */
+.sidebar-header-profile { padding: 20px; display: flex; justify-content: space-between; align-items: center; background: white; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+.user-info { display: flex; align-items: center; overflow: hidden; }
+.header-actions button { margin-left: 5px; font-size: 12px; padding: 6px 12px; border: 1px solid #ddd; background: transparent; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+.header-actions button:hover { background: #f1f5f9; }
 
-.attach-btn, .emoji-btn {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: white;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px;
-  color: #555;
-  box-shadow: var(--shadow-sm);
-}
+/* แท็บเลือก (Chats / Users) */
+.sidebar-tabs { display: flex; padding: 10px 15px; gap: 10px; background: #f9fafb; flex-shrink: 0; }
+.tab-btn { flex: 1; padding: 10px; border: none; background: #e5e7eb; border-radius: 8px; cursor: pointer; font-weight: 500; color: #666; transition: 0.2s; }
+.tab-btn.active { background: #ffffff; color: var(--primary-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-.image-preview-container {
-  padding: 10px 20px;
-  background: rgba(255,255,255,0.6);
-  border-top: 1px solid rgba(0,0,0,0.05);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+.chats-action-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; font-size: 13px; color: #888; flex-shrink: 0; }
+.create-group-icon-btn { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-color); color: white; border: none; font-size: 20px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+.create-group-icon-btn:hover { transform: scale(1.1); background: var(--primary-hover); }
 
-.image-preview-container img {
-  height: 60px;
-  border-radius: 8px;
-  border: 2px solid white;
-}
+/* รายการแชท */
+.chat-list { flex: 1; overflow-y: auto; min-height: 0; padding: 10px; }
+.chat-item { display: flex; align-items: center; padding: 12px; border-radius: var(--radius-md); cursor: pointer; transition: var(--transition); margin-bottom: 4px; justify-content: space-between; }
+.chat-item:hover { background-color: white; box-shadow: var(--shadow-sm); }
 
-.remove-image-btn {
-  position: absolute; top: -5px; right: -5px;
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background: #ef4444; color: white;
-  border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px;
-}
+/* รูปโปรไฟล์และจุดสถานะ */
+.avatar { width: 45px; height: 45px; border-radius: 12px; background: linear-gradient(135deg, #455cc0 0%, #347aa2 100%); color: white; display: flex; justify-content: center; align-items: center; font-weight: 600; margin-right: 12px; flex-shrink: 0; overflow: hidden; position: relative; }
+.avatar.group { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.online-status-dot { position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; background-color: var(--accent-color); border: 2px solid white; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); z-index: 5; }
 
-/* ==================== 6. Modal (Create Group) ==================== */
-.modal-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex; justify-content: center; align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
-}
+.chat-info { flex: 1; min-width: 0; }
+.chat-name { font-weight: 500; color: var(--text-primary); font-size: 15px; }
+.last-message { font-size: 13px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.modal-content {
-  background: white;
-  padding: 24px;
-  border-radius: var(--radius-md);
-  width: 90%;
-  max-width: 360px;
-  box-shadow: var(--shadow-xl);
-}
+/* [Unread Badge] ตัวเลขแจ้งเตือนสีแดง */
+.unread-badge { background-color: var(--danger-color); color: white; font-size: 11px; font-weight: bold; min-width: 20px; height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 0 6px; margin-left: auto; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3); }
 
-.modal-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+/* ==========================================================================
+   5. Modals & Pages (หน้าต่างและหน้าจออื่นๆ)
+   ========================================================================== */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(4px); padding: 20px; }
+.modal-content { background: white; padding: 24px; border-radius: var(--radius-xl); width: 100%; max-width: 380px; box-shadow: var(--shadow-xl); animation: popUp 0.3s ease-out; }
+@keyframes popUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+.modal-header h3 { margin: 0; font-size: 18px; }
 .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #888; }
+.group-name-input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 12px; font-family: inherit; }
+.user-selection-list { max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
+.user-checkbox-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f9f9f9; align-items: center; }
+.confirm-btn { width: 100%; padding: 14px; background: var(--primary-color); color: white; border: none; border-radius: 8px; margin-top: 20px; cursor: pointer; font-weight: 600; font-size: 15px; }
+.confirm-btn:hover { background: var(--primary-hover); }
 
-.group-name-input {
-  width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 12px; font-family: inherit;
-}
+/* หน้า Login */
+.login-container { background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 48px 40px; border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); text-align: center; width: 100%; max-width: 420px; }
+.login-container h1 { margin-bottom: 32px; font-size: 32px; background: linear-gradient(135deg, var(--primary-color) 0%, #347aa2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.login-form { display: flex; flex-direction: column; gap: 16px; }
+.login-form input { width: 100%; padding: 16px 20px; border: 2px solid var(--border); border-radius: var(--radius-md); font-size: 15px; }
+.login-form button { width: 100%; padding: 16px 24px; border: none; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; cursor: pointer; transition: var(--transition); color: white; }
+.login-form button:first-of-type { background: var(--primary-color); }
+.login-form button:last-of-type { background: var(--accent-color); }
 
-.user-selection-list {
-  max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 6px;
-}
+/* หน้า Welcome */
+.welcome-screen { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center; padding: 20px; color: var(--text-tertiary); animation: fadeIn 0.5s ease; }
+.welcome-screen h2 { font-size: 24px; color: var(--primary-color); margin-bottom: 10px; }
 
-.user-checkbox-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f9f9f9; }
-
-.confirm-btn {
-  width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 6px; margin-top: 20px; cursor: pointer;
-}
-
-/* ==================== 7. Welcome Screen & Misc ==================== */
-.welcome-screen {
-  display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center;
-}
-.welcome-screen h2 { color: var(--primary-color); margin-bottom: 8px; }
-.welcome-screen p { color: var(--text-tertiary); }
-
-.online-indicator {
-  width: 10px; height: 10px; background: var(--accent-color); border-radius: 50%; display: inline-block; margin-left: 6px;
-}
-
-/* ==================== 8. Mobile Responsive ==================== */
+/* ==========================================================================
+   6. Mobile Responsive Tweaks (ปรับแต่งสำหรับมือถือ)
+   ========================================================================== */
 @media (max-width: 768px) {
-  .app-container { padding: 0; }
+  /* ลบ Padding เพื่อให้เนื้อหาชนขอบจอ */
+  .app-container { padding: 0; align-items: flex-start; }
   
-  .main-layout {
-    width: 100%; height: 100vh;
-    border-radius: 0;
-    border: none;
-    margin: 0;
-  }
-
-  /* MainLayout.jsx จะจัดการเรื่อง display: none/block ให้เอง */
-  .sidebar { width: 100%; border-right: none; }
-  .chat-window { width: 100%; }
-
-  .message img { max-width: 200px; } /* ลดขนาดรูปลงในมือถือ */
-  .message-wrapper { max-width: 85%; }
+  /* ให้แอปเต็มจอ 100% ไม่มีขอบมน */
+  .main-layout { width: 100vw; height: 100dvh; border-radius: 0; border: none; margin: 0; box-shadow: none; }
   
+  /* แสดงทีละหน้า (Logic display: none/flex จะถูกคุมโดย React) */
+  .sidebar, .chat-window { width: 100% !important; border-right: none; }
+  
+  /* ปรับขนาดส่วนประกอบให้เล็กลง */
+  .chat-item { padding: 10px; }
+  .avatar { width: 42px; height: 42px; }
+  
+  /* ลดขนาดรูปภาพในแชทมือถือ */
+  .message img { max-width: 220px; max-height: 250px; }
+  
+  /* ซ่อน Emoji Picker ในมือถือ (เกะกะ) */
   .emoji-btn, .emoji-picker-container { display: none !important; }
-
-  .input-area input[type="text"] { width: 100%; min-width: 0; }
   
+  /* ปรับช่องพิมพ์ข้อความ */
+  .input-area { padding: 10px; gap: 8px; }
+  .input-area button[type="submit"] { padding: 8px 16px; font-size: 14px; }
+  
+  /* ปรับหน้า Login */
   .login-container { width: 90%; padding: 30px 20px; }
 }
